@@ -1,10 +1,10 @@
 import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: InstanceType<typeof PrismaClient> };
 
 function createPrisma() {
-  const adapter = new PrismaBetterSqlite3({ url: "file:prisma/financeiro.db" });
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
   // @ts-expect-error Prisma 7 adapter type
   return new PrismaClient({ adapter });
 }

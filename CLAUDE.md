@@ -5,17 +5,26 @@ Sistema de gestão financeira pessoal para **Sophia Ferreira Petry**.
 ## Stack
 
 - Next.js 16 (App Router + Turbopack)
-- Prisma 7 + SQLite (`prisma/financeiro.db`)
+- Prisma 7 + PostgreSQL via **Neon** (serverless)
 - Tailwind CSS v4
 - TypeScript
 - Recharts (gráficos)
 
-## Iniciar
+## Deploy
+
+- **Frontend:** Vercel — https://financeiro.vercel.app (ou URL atribuída)
+- **Banco:** Neon PostgreSQL — configurado via `DATABASE_URL` no ambiente
+
+## Iniciar localmente
 
 ```bash
-npm run dev        # http://localhost:3000
-npm run seed       # popular categorias iniciais
-npx prisma migrate dev  # aplicar mudanças no schema
+# 1. Copiar .env.example para .env e preencher DATABASE_URL com a string do Neon
+cp .env.example .env
+
+npm run dev              # http://localhost:3000
+npm run seed             # popular categorias iniciais
+npx prisma migrate dev   # criar nova migration
+npx prisma migrate deploy  # aplicar migrations no banco
 ```
 
 ## Módulos
@@ -53,11 +62,6 @@ npx prisma migrate dev  # aplicar mudanças no schema
 - Valores em `R$ 0.000,00` (Intl.NumberFormat pt-BR)
 - Datas em `DD/MM/AAAA`
 - Tipo de transação: `"receita"` (verde) | `"despesa"` (vermelho)
-
-## Deploy (opcional)
-
-Atualmente roda apenas em localhost com SQLite.
-Para deploy na Vercel: migrar banco para **Neon (PostgreSQL)** — trocar `provider = "sqlite"` por `"postgresql"` no schema e atualizar `prisma.config.ts` com a connection string do Neon.
 
 ## Git
 
