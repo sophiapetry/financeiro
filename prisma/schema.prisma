@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Categoria {
+  id         Int          @id @default(autoincrement())
+  nome       String       @unique
+  tipo       String
+  cor        String       @default("#6366f1")
+  icone      String       @default("tag")
+  transacoes Transacao[]
+  orcamentos Orcamento[]
+  criadoEm   DateTime     @default(now())
+}
+
+model Transacao {
+  id          Int       @id @default(autoincrement())
+  descricao   String
+  valor       Float
+  tipo        String
+  data        DateTime
+  categoriaId Int
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
+  observacao  String?
+  criadoEm    DateTime  @default(now())
+}
+
+model Orcamento {
+  id          Int       @id @default(autoincrement())
+  categoriaId Int
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
+  mes         Int
+  ano         Int
+  limite      Float
+  criadoEm    DateTime  @default(now())
+
+  @@unique([categoriaId, mes, ano])
+}
