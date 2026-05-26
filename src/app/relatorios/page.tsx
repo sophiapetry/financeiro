@@ -97,7 +97,7 @@ export default function RelatoriosPage() {
             <h2 className="font-semibold text-gray-800 mb-4">Despesas por categoria</h2>
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
-                <Pie data={porCategoriaDespesa} dataKey="total" nameKey="nome" cx="50%" cy="50%" outerRadius={90} label={({ nome, percent }: { nome: string; percent: number }) => `${(percent * 100).toFixed(0)}%`}>
+                <Pie data={porCategoriaDespesa} dataKey="total" nameKey="nome" cx="50%" cy="50%" outerRadius={90} label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}>
                   {porCategoriaDespesa.map((c, i) => <Cell key={i} fill={c.cor} />)}
                 </Pie>
                 <Legend />

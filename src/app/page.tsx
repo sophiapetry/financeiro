@@ -71,7 +71,7 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={dados.gastosPorCategoria} dataKey="total" nameKey="nome" cx="50%" cy="50%" outerRadius={80} label={({ nome, percent }: { nome: string; percent: number }) => `${nome} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                <Pie data={dados.gastosPorCategoria} dataKey="total" nameKey="nome" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
                   {dados.gastosPorCategoria.map((c, i) => <Cell key={i} fill={c.cor} />)}
                 </Pie>
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />
