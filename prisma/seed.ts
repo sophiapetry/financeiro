@@ -7,14 +7,13 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const contas = [
-    { nome: "Nubank", tipo: "corrente", cor: "#8b5cf6" },
     { nome: "Itaú", tipo: "corrente", cor: "#f97316" },
     { nome: "Banco do Brasil", tipo: "corrente", cor: "#facc15" },
-    { nome: "Poupança", tipo: "poupanca", cor: "#06b6d4" },
-    { nome: "Ações", tipo: "acoes", cor: "#8b5cf6" },
-    { nome: "Renda Fixa", tipo: "renda_fixa", cor: "#f59e0b" },
-    { nome: "Tesouro Direto", tipo: "tesouro", cor: "#22c55e" },
-    { nome: "Cofrinho", tipo: "cofrinho", cor: "#ec4899" },
+    { nome: "Caixa", tipo: "corrente", cor: "#3b82f6" },
+    { nome: "Banrisul", tipo: "corrente", cor: "#ef4444" },
+    { nome: "Nubank", tipo: "digital", cor: "#8b5cf6" },
+    { nome: "PicPay", tipo: "digital", cor: "#22c55e" },
+    { nome: "PagSeguro", tipo: "digital", cor: "#f59e0b" },
   ];
 
   for (const conta of contas) {

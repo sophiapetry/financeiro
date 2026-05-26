@@ -17,10 +17,9 @@ const CORES = ["#3b82f6", "#8b5cf6", "#22c55e", "#ef4444", "#f59e0b", "#ec4899",
 const TIPOS: Record<string, string> = {
   corrente: "Conta Corrente",
   poupanca: "Poupança",
-  acoes: "Ações",
-  renda_fixa: "Renda Fixa",
-  tesouro: "Tesouro Direto",
-  cofrinho: "Cofrinho",
+  digital: "Conta Digital",
+  cartao: "Cartão de Crédito",
+  investimento: "Investimentos",
   carteira: "Carteira",
   outro: "Outro",
 };

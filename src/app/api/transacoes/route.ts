@@ -28,6 +28,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+
+  if (Array.isArray(body)) {
+    const result = await prisma.transacao.createMany({
+      data: body.map((t) => ({ ...t, data: new Date(t.data) })),
+    });
+    return NextResponse.json({ count: result.count }, { status: 201 });
+  }
+
   const transacao = await prisma.transacao.create({
     data: { ...body, data: new Date(body.data) },
     include: { categoria: true },
