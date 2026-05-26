@@ -82,7 +82,7 @@ export default function RelatoriosPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} />
+              <Tooltip formatter={(v) => formatCurrency(Number(v))} />
               <Legend />
               <Bar dataKey="receitas" name="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} />
               <Bar dataKey="despesas" name="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -101,7 +101,7 @@ export default function RelatoriosPage() {
                   {porCategoriaDespesa.map((c, i) => <Cell key={i} fill={c.cor} />)}
                 </Pie>
                 <Legend />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
               </PieChart>
             </ResponsiveContainer>
           </div>

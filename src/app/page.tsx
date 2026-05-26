@@ -56,7 +56,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} />
+              <Tooltip formatter={(v) => formatCurrency(Number(v))} />
               <Legend />
               <Bar dataKey="receitas" name="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} />
               <Bar dataKey="despesas" name="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -74,7 +74,7 @@ export default function Dashboard() {
                 <Pie data={dados.gastosPorCategoria} dataKey="total" nameKey="nome" cx="50%" cy="50%" outerRadius={80} label={({ nome, percent }: { nome: string; percent: number }) => `${nome} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
                   {dados.gastosPorCategoria.map((c, i) => <Cell key={i} fill={c.cor} />)}
                 </Pie>
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
               </PieChart>
             </ResponsiveContainer>
           )}
