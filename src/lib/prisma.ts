@@ -5,7 +5,6 @@ const globalForPrisma = globalThis as unknown as { prisma: InstanceType<typeof P
 
 function createPrisma() {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
-  // @ts-expect-error Prisma 7 adapter type
   return new PrismaClient({ adapter });
 }
 
