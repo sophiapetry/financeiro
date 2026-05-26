@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ArrowLeftRight, PieChart, Target, Settings } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, PieChart, Target, Settings, Landmark } from "lucide-react";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transacoes", label: "Transações", icon: ArrowLeftRight },
+  { href: "/contas", label: "Contas", icon: Landmark },
   { href: "/relatorios", label: "Relatórios", icon: PieChart },
   { href: "/orcamento", label: "Orçamento", icon: Target },
   { href: "/categorias", label: "Categorias", icon: Settings },

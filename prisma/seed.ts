@@ -6,6 +6,26 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  const contas = [
+    { nome: "Nubank", tipo: "corrente", cor: "#8b5cf6" },
+    { nome: "Itaú", tipo: "corrente", cor: "#f97316" },
+    { nome: "Banco do Brasil", tipo: "corrente", cor: "#facc15" },
+    { nome: "Poupança", tipo: "poupanca", cor: "#06b6d4" },
+    { nome: "Ações", tipo: "acoes", cor: "#8b5cf6" },
+    { nome: "Renda Fixa", tipo: "renda_fixa", cor: "#f59e0b" },
+    { nome: "Tesouro Direto", tipo: "tesouro", cor: "#22c55e" },
+    { nome: "Cofrinho", tipo: "cofrinho", cor: "#ec4899" },
+  ];
+
+  for (const conta of contas) {
+    await prisma.conta.upsert({
+      where: { nome: conta.nome },
+      update: {},
+      create: conta,
+    });
+  }
+  console.log("Seed: 8 contas criadas.");
+
   const categorias = [
     { nome: "Salário", tipo: "receita", cor: "#22c55e" },
     { nome: "Freelance", tipo: "receita", cor: "#14b8a6" },
@@ -29,6 +49,7 @@ async function main() {
     });
   }
   console.log("Seed concluído: 12 categorias criadas.");
+  console.log("Seed concluído!");
 }
 
 main().finally(() => prisma.$disconnect());

@@ -4,7 +4,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Landmark } from "lucide-react";
+import Link from "next/link";
 import CardResumo from "@/components/CardResumo";
 import SeletorMes from "@/components/SeletorMes";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -17,6 +18,7 @@ interface DashboardData {
   evolucao: { mes: string; receitas: number; despesas: number }[];
   progressoOrcamento: { categoria: string; cor: string; limite: number; gasto: number; percentual: number }[];
   ultimasTransacoes: { id: number; descricao: string; valor: number; tipo: string; data: string; categoria: { nome: string; cor: string } }[];
+  saldoPorConta: { id: number; nome: string; cor: string; saldo: number }[];
 }
 
 export default function Dashboard() {
@@ -80,6 +82,28 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {dados.saldoPorConta.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-800">Saldo por conta</h2>
+            <Link href="/contas" className="text-xs text-indigo-600 hover:underline">Ver todas</Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {dados.saldoPorConta.map((c) => (
+              <div key={c.id} className="border rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.cor }} />
+                  <span className="text-xs text-gray-500 truncate">{c.nome}</span>
+                </div>
+                <p className={`text-sm font-bold ${c.saldo >= 0 ? "text-gray-800" : "text-red-600"}`}>
+                  {formatCurrency(c.saldo)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {dados.progressoOrcamento.length > 0 && (

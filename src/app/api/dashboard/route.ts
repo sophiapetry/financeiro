@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const inicio = new Date(ano, mes - 1, 1);
   const fim = new Date(ano, mes, 0, 23, 59, 59);
 
-  const [transacoes, orcamentos] = await Promise.all([
+  const [transacoes, orcamentos, contas] = await Promise.all([
     prisma.transacao.findMany({
       where: { data: { gte: inicio, lte: fim } },
       include: { categoria: true },
@@ -17,6 +17,11 @@ export async function GET(req: NextRequest) {
     prisma.orcamento.findMany({
       where: { mes, ano },
       include: { categoria: true },
+    }),
+    prisma.conta.findMany({
+      where: { ativo: true },
+      include: { transacoes: { select: { valor: true, tipo: true } } },
+      orderBy: { nome: "asc" },
     }),
   ]);
 
@@ -73,6 +78,12 @@ export async function GET(req: NextRequest) {
     };
   });
 
+  const saldoPorConta = contas.map((c) => {
+    const rec = c.transacoes.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
+    const desp = c.transacoes.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
+    return { id: c.id, nome: c.nome, cor: c.cor, saldo: c.saldoInicial + rec - desp };
+  });
+
   return NextResponse.json({
     totalReceitas,
     totalDespesas,
@@ -81,5 +92,6 @@ export async function GET(req: NextRequest) {
     evolucao,
     progressoOrcamento,
     ultimasTransacoes: transacoes.slice(0, 5),
+    saldoPorConta,
   });
 }

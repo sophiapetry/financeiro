@@ -6,6 +6,7 @@ import ModalTransacao from "@/components/ModalTransacao";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 
 interface Categoria { id: number; nome: string; cor: string; tipo: string }
+interface Conta { id: number; nome: string; cor: string }
 interface Transacao {
   id: number;
   descricao: string;
@@ -13,8 +14,10 @@ interface Transacao {
   tipo: string;
   data: string;
   categoriaId: number;
+  contaId?: number | null;
   observacao?: string;
   categoria: Categoria;
+  conta?: Conta | null;
 }
 
 export default function TransacoesPage() {
@@ -102,6 +105,7 @@ export default function TransacoesPage() {
                 <th className="px-4 py-3 font-medium">Data</th>
                 <th className="px-4 py-3 font-medium">Descrição</th>
                 <th className="px-4 py-3 font-medium">Categoria</th>
+                <th className="px-4 py-3 font-medium">Conta</th>
                 <th className="px-4 py-3 font-medium text-right">Valor</th>
                 <th className="px-4 py-3 font-medium text-center">Ações</th>
               </tr>
@@ -118,6 +122,15 @@ export default function TransacoesPage() {
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: t.categoria.cor }}>
                       {t.categoria.nome}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {t.conta ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: t.conta.cor }}>
+                        {t.conta.nome}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">—</span>
+                    )}
                   </td>
                   <td className={`px-4 py-3 text-right font-semibold ${t.tipo === "receita" ? "text-green-600" : "text-red-600"}`}>
                     {t.tipo === "receita" ? "+" : "-"}{formatCurrency(t.valor)}

@@ -18,6 +18,17 @@ model Categoria {
   criadoEm   DateTime     @default(now())
 }
 
+model Conta {
+  id           Int         @id @default(autoincrement())
+  nome         String      @unique
+  tipo         String      @default("corrente")
+  cor          String      @default("#3b82f6")
+  saldoInicial Float       @default(0)
+  ativo        Boolean     @default(true)
+  transacoes   Transacao[]
+  criadoEm     DateTime    @default(now())
+}
+
 model Transacao {
   id          Int       @id @default(autoincrement())
   descricao   String
@@ -26,6 +37,8 @@ model Transacao {
   data        DateTime
   categoriaId Int
   categoria   Categoria @relation(fields: [categoriaId], references: [id])
+  contaId     Int?
+  conta       Conta?    @relation(fields: [contaId], references: [id])
   observacao  String?
   criadoEm    DateTime  @default(now())
 }

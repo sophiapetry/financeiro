@@ -8,6 +8,12 @@ interface Categoria {
   tipo: string;
 }
 
+interface Conta {
+  id: number;
+  nome: string;
+  cor: string;
+}
+
 interface Transacao {
   id?: number;
   descricao: string;
@@ -15,6 +21,7 @@ interface Transacao {
   tipo: string;
   data: string;
   categoriaId: number;
+  contaId?: number | null;
   observacao?: string;
 }
 
@@ -31,15 +38,18 @@ const vazio: Transacao = {
   tipo: "despesa",
   data: new Date().toISOString().split("T")[0],
   categoriaId: 0,
+  contaId: null,
   observacao: "",
 };
 
 export default function ModalTransacao({ aberto, onFechar, onSalvar, transacaoInicial }: Props) {
   const [form, setForm] = useState<Transacao>(vazio);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [contas, setContas] = useState<Conta[]>([]);
 
   useEffect(() => {
     fetch("/api/categorias").then((r) => r.json()).then(setCategorias);
+    fetch("/api/contas").then((r) => r.json()).then(setContas);
   }, []);
 
   useEffect(() => {
@@ -132,6 +142,22 @@ export default function ModalTransacao({ aberto, onFechar, onSalvar, transacaoIn
             >
               <option value="">Selecione...</option>
               {categoriasFiltradas.map((c) => (
+                <option key={c.id} value={c.id}>{c.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Conta <span className="text-gray-400">(opcional)</span>
+            </label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={form.contaId ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, contaId: e.target.value ? Number(e.target.value) : null }))}
+            >
+              <option value="">Sem conta</option>
+              {contas.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
             </select>
