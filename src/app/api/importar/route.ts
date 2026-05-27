@@ -240,8 +240,10 @@ export async function POST(req: NextRequest) {
   let periodo: string | null = null;
 
   if (nome.endsWith(".pdf")) {
-    // Dynamic import para evitar problema de inicialização do pdf-parse no Next.js
-    const pdfParse = (await import("pdf-parse")).default;
+    // Dynamic import — pdf-parse exporta a função diretamente no ESM
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mod = await import("pdf-parse") as any;
+    const pdfParse: (buf: Buffer) => Promise<{ text: string }> = mod.default ?? mod;
     const pdfData = await pdfParse(buffer);
     const text = pdfData.text;
 
