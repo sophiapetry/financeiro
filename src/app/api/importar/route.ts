@@ -51,7 +51,7 @@ function inferirAnoPDF(text: string): number {
 function detectarBanco(text: string): string {
   const t = text.toLowerCase();
   if (t.includes("nubank")) return "Nubank";
-  if (t.includes("itaú") || t.includes("itau")) return "Itaú";
+  if (t.includes("itaú") || t.includes("itau") || t.includes("extrato conta / lançamentos") || t.includes("extrato conta / lancamentos")) return "Itaú";
   if (t.includes("banco do brasil") || t.includes("bb.com")) return "Banco do Brasil";
   if (t.includes("caixa econômica") || t.includes("caixa federal") || t.includes("cef") || /\bcaixa\b/.test(t)) return "Caixa";
   if (t.includes("banrisul")) return "Banrisul";
@@ -114,6 +114,37 @@ function parseGenerico(text: string): TransacaoRaw[] {
   }
 
   return result;
+}
+
+// ─── Parser específico Itaú ──────────────────────────────────────────────────
+// Formato: DD/MM/AAAA   LANÇAMENTO   ±VALOR[   ±SALDO]
+// Sinal explícito: negativo = despesa, positivo = receita
+
+function parseItau(text: string): TransacaoRaw[] {
+  const result: TransacaoRaw[] = [];
+
+  for (const linha of text.split(/\r?\n/)) {
+    const m = linha.match(
+      /^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([-]?\d[\d.]*,\d{2})(?:\s+[-]?\d[\d.]*,\d{2})?$/
+    );
+    if (!m) continue;
+
+    const [, dateStr, descRaw, valorStr] = m;
+    const [d, mo, y] = dateStr.split("/");
+    const data = `${y}-${mo}-${d}`;
+
+    const descricao = descRaw.trim();
+    if (!descricao || isLinhaDesprezivel(descricao)) continue;
+
+    const valorNum = parseFloat(valorStr.replace(/\./g, "").replace(",", "."));
+    if (isNaN(valorNum) || valorNum === 0) continue;
+
+    const valor = Math.abs(valorNum);
+    const tipo: "receita" | "despesa" = valorNum < 0 ? "despesa" : "receita";
+    result.push({ data, descricao, valor, tipo });
+  }
+
+  return result.length ? result : parseGenerico(text);
 }
 
 // ─── Parser específico Caixa ─────────────────────────────────────────────────
@@ -460,6 +491,7 @@ export async function POST(req: NextRequest) {
     banco = detectarBanco(text);
     if (banco === "Nubank") transacoesRaw = parseNubank(text);
     else if (banco === "Caixa") transacoesRaw = parseCaixa(text);
+    else if (banco === "Itaú") transacoesRaw = parseItau(text);
     else transacoesRaw = parseGenerico(text);
 
     // Período: procura no texto padrões como "01/03/2024 a 31/03/2024"
