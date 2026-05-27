@@ -39,7 +39,7 @@ export default function ImportarPage() {
 
   async function handleArquivo(file: File) {
     const ext = file.name.toLowerCase();
-    const aceitos = [".pdf", ".xlsx", ".xls", ".csv", ".txt", ".ofx", ".qfx"];
+    const aceitos = [".pdf", ".xlsx", ".xls", ".csv", ".txt", ".ofx", ".qfx", ".ofc"];
     if (!aceitos.some((e) => ext.endsWith(e))) {
       setErro("Formato não suportado. Envie .pdf, .xlsx, .csv ou .ofx.");
       return;
@@ -247,12 +247,12 @@ export default function ImportarPage() {
             <Upload size={40} className="text-gray-400" />
             <div className="text-center">
               <p className="text-gray-700 font-medium">Arraste o arquivo aqui ou clique para selecionar</p>
-              <p className="text-gray-400 text-sm mt-1">PDF · Excel · CSV · OFX</p>
+              <p className="text-gray-400 text-sm mt-1">PDF · Excel · CSV · OFX · OFC</p>
             </div>
             {arquivo && <p className="text-indigo-600 text-sm font-medium">{arquivo.name}</p>}
           </>
         )}
-        <input ref={inputRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt,.ofx,.qfx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }} />
+        <input ref={inputRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt,.ofx,.qfx,.ofc" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }} />
       </div>
 
       {erro && (

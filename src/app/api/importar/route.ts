@@ -537,10 +537,12 @@ export async function POST(req: NextRequest) {
     transacoesRaw = parsed.transacoes;
     banco = parsed.banco;
     periodo = parsed.periodo;
-  } else if (nome.endsWith(".ofx") || nome.endsWith(".qfx")) {
+  } else if (nome.endsWith(".ofx") || nome.endsWith(".qfx") || nome.endsWith(".ofc")) {
     transacoesRaw = parseOFX(buffer);
-    // Detecta banco pelo texto do OFX
-    const ofxText = buffer.toString("latin1");
+    // Detecta banco pelo texto do OFX/OFC
+    const ofxText = buffer.toString("utf-8").toLowerCase().includes("ofxheader")
+      ? buffer.toString("utf-8")
+      : buffer.toString("latin1");
     banco = detectarBanco(ofxText);
     const periodoMatch = ofxText.match(/DTSTART[^>]*>(\d{8})[\s\S]*?DTEND[^>]*>(\d{8})/i);
     if (periodoMatch) {
