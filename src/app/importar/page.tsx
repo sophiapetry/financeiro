@@ -53,12 +53,17 @@ export default function ImportarPage() {
       const res = await fetch("/api/importar", { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) { setErro(data.erro ?? "Erro ao processar arquivo."); return; }
+      if (!data.transacoes?.length) {
+        setErro("Nenhuma transação encontrada. Certifique-se de enviar um extrato bancário (não um comprovante avulso).");
+        return;
+      }
       setPreview(data.transacoes);
       setBanco(data.banco);
       setPeriodo(data.periodo);
       setEtapa("preview");
-    } catch {
-      setErro("Falha ao processar o arquivo. Verifique se é um XLSX válido.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setErro(msg.includes("PDF") ? "Erro ao ler o PDF. Tente exportar como OFX ou CSV no internet banking." : "Falha ao processar o arquivo.");
     } finally {
       setCarregando(false);
     }
@@ -264,7 +269,7 @@ export default function ImportarPage() {
           <li>Revise as transações e selecione a conta</li>
           <li>Confirme a importação</li>
         </ol>
-        <p className="text-xs text-gray-400 pt-1">OFX é o formato mais preciso quando disponível. PDFs escaneados não funcionam.</p>
+        <p className="text-xs text-gray-400 pt-1">Use o <strong>extrato do período</strong>, não comprovantes avulsos. OFX é o formato mais preciso. PDFs escaneados não funcionam.</p>
       </div>
     </div>
   );
