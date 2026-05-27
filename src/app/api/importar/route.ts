@@ -481,12 +481,25 @@ export async function POST(req: NextRequest) {
   let periodo: string | null = null;
 
   if (nome.endsWith(".pdf")) {
-    // Dynamic import — pdf-parse exporta a função diretamente no ESM
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod = await import("pdf-parse") as any;
-    const pdfParse: (buf: Buffer) => Promise<{ text: string }> = mod.default ?? mod;
-    const pdfData = await pdfParse(buffer);
-    const text = pdfData.text;
+    let text = "";
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mod = await import("pdf-parse") as any;
+      const pdfParse: (buf: Buffer) => Promise<{ text: string }> = mod.default ?? mod;
+      const pdfData = await pdfParse(buffer);
+      text = pdfData.text;
+    } catch (pdfErr) {
+      const msg = pdfErr instanceof Error ? pdfErr.message : String(pdfErr);
+      return NextResponse.json({
+        erro: `Não foi possível ler o PDF (${msg}). Tente exportar o extrato no formato OFX ou CSV pelo internet banking — são formatos mais precisos.`,
+      }, { status: 422 });
+    }
+
+    if (!text || text.trim().length < 20) {
+      return NextResponse.json({
+        erro: "O PDF não contém texto legível (possivelmente escaneado). Exporte o extrato no formato OFX ou CSV pelo internet banking.",
+      }, { status: 422 });
+    }
 
     banco = detectarBanco(text);
     if (banco === "Nubank") transacoesRaw = parseNubank(text);
