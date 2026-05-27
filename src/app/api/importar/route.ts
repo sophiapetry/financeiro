@@ -15,9 +15,14 @@ interface TransacaoRaw {
 // ─── Utilitários ──────────────────────────────────────────────────────────────
 
 function parseBRMoney(val: unknown): number {
-  if (!val) return 0;
-  const s = String(val).replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
-  return Math.abs(parseFloat(s) || 0);
+  if (val === null || val === undefined || val === "") return 0;
+  // XLSX armazena números como float — não processar como string BR
+  if (typeof val === "number") return Math.abs(val);
+  const s = String(val).replace(/[R$\s]/g, "");
+  // Formato BR: 1.234,56
+  if (/\d\.\d{3},/.test(s)) return Math.abs(parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0);
+  // Formato padrão: 1234.56 ou 1,234.56
+  return Math.abs(parseFloat(s.replace(/,/g, "")) || 0);
 }
 
 function parseBRDate(s: string, anoBase: number): string | null {
@@ -287,28 +292,38 @@ function parseCSV(buffer: Buffer): TransacaoRaw[] {
   return result;
 }
 
-// ─── XLSX (output da skill) ───────────────────────────────────────────────────
+// ─── XLSX (output da skill ou extrato bancário) ──────────────────────────────
 
 function parseXLSX(buffer: Buffer): { transacoes: TransacaoRaw[]; banco: string | null; periodo: string | null } {
   const wb = XLSX.read(buffer, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
 
-  let headerIdx = 1;
-  for (let i = 0; i < Math.min(rows.length, 8); i++) {
-    const row = rows[i] as string[];
-    if (row.some((c) => String(c).trim() === "Data") && row.some((c) => /hist/i.test(String(c)))) {
-      headerIdx = i; break;
-    }
+  // Procura cabeçalho em até 20 linhas — encontra linha com "data" + coluna de texto/valor
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const row = (rows[i] as unknown[]).map((c) => String(c).trim().toLowerCase());
+    const rowJoined = row.join(" ");
+    const temData = row.some((c) => /^data$|^date$/.test(c));
+    const temDesc = /descri|histor|tipo|memo|lancam/.test(rowJoined);
+    const temValor = /entrada|saida|valor|crédit|débit|credit|debit|amount/.test(rowJoined);
+    if (temData && (temDesc || temValor)) { headerIdx = i; break; }
   }
+  if (headerIdx === -1) headerIdx = 0;
 
-  const headers = (rows[headerIdx] as string[]).map((h) => String(h).trim().toLowerCase());
+  const headers = (rows[headerIdx] as unknown[]).map((h) =>
+    String(h).trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  );
+
+  // Mapeamento flexível de colunas
   const col = {
-    data: headers.findIndex((h) => h === "data"),
-    historico: headers.findIndex((h) => h.includes("hist")),
-    debito: headers.findIndex((h) => h.includes("déb") || h.includes("deb")),
-    credito: headers.findIndex((h) => h.includes("créd") || h.includes("cred")),
-    categoria: headers.findIndex((h) => h.includes("categ")),
+    data:     headers.findIndex((h) => /^data$|^date$/.test(h)),
+    desc:     headers.findIndex((h) => /descri|histor|memo|estabelec/.test(h)),
+    tipo:     headers.findIndex((h) => /^tipo$|^type$/.test(h)),
+    entradas: headers.findIndex((h) => /entrada|credito|credit|recebido/.test(h)),
+    saidas:   headers.findIndex((h) => /saida|debito|debit|pagamento/.test(h)),
+    valor:    headers.findIndex((h) => /^valor$|^value$|^amount$/.test(h)),
+    categoria:headers.findIndex((h) => /categ/.test(h)),
   };
 
   const anoBase = new Date().getFullYear();
@@ -316,21 +331,60 @@ function parseXLSX(buffer: Buffer): { transacoes: TransacaoRaw[]; banco: string 
 
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i] as unknown[];
+
+    // Data
     const rawDate = String(col.data >= 0 ? row[col.data] : row[0]).trim();
-    const data = parseBRDate(rawDate, anoBase) ??
-      (/^\d+$/.test(rawDate) ? (() => { const d = XLSX.SSF.parse_date_code(Number(rawDate)); return d ? `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}` : null; })() : null);
+    let data: string | null = parseBRDate(rawDate, anoBase);
+    if (!data && /^\d+$/.test(rawDate)) {
+      const d = XLSX.SSF.parse_date_code(Number(rawDate));
+      if (d) data = `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
+    }
     if (!data) continue;
 
-    const descricao = String(col.historico >= 0 ? row[col.historico] : row[2] ?? "").trim();
+    // Descrição: prefere coluna "Descrição", concatena com "Tipo" se disponível
+    let descricao = "";
+    if (col.desc >= 0) {
+      descricao = String(row[col.desc] ?? "").trim();
+      if (col.tipo >= 0 && descricao) {
+        const tipoVal = String(row[col.tipo] ?? "").trim();
+        if (tipoVal && tipoVal.toLowerCase() !== descricao.toLowerCase()) {
+          descricao = `${tipoVal} — ${descricao}`;
+        }
+      }
+    } else if (col.tipo >= 0) {
+      descricao = String(row[col.tipo] ?? "").trim();
+    } else {
+      descricao = String(row[1] ?? row[2] ?? "").trim();
+    }
+
     if (!descricao || isLinhaDesprezivel(descricao)) continue;
 
-    const debito = parseBRMoney(col.debito >= 0 ? row[col.debito] : row[4]);
-    const credito = parseBRMoney(col.credito >= 0 ? row[col.credito] : row[5]);
-    if (debito === 0 && credito === 0) continue;
+    // Valor e tipo
+    let valor = 0;
+    let tipo: "receita" | "despesa" = "despesa";
 
-    const catSkill = String(col.categoria >= 0 ? row[col.categoria] : row[7] ?? "OUTROS").trim().toUpperCase();
-    const tipo: "receita" | "despesa" = credito > 0 ? "receita" : "despesa";
-    transacoes.push({ data, descricao, valor: credito > 0 ? credito : debito, tipo, categoriaSkill: catSkill });
+    if (col.entradas >= 0 && col.saidas >= 0) {
+      const ent = parseBRMoney(row[col.entradas]);
+      const sai = parseBRMoney(row[col.saidas]);
+      if (ent > 0) { valor = ent; tipo = "receita"; }
+      else if (sai > 0) { valor = sai; tipo = "despesa"; }
+    } else if (col.valor >= 0) {
+      const raw = row[col.valor];
+      valor = parseBRMoney(raw);
+      const num = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/\./g,"").replace(",","."));
+      tipo = num >= 0 ? "receita" : "despesa";
+    } else {
+      // Fallback: última tentativa com colunas numéricas
+      const num4 = parseBRMoney(row[3]);
+      const num5 = parseBRMoney(row[4]);
+      if (num4 > 0) { valor = num4; tipo = "receita"; }
+      else if (num5 > 0) { valor = num5; tipo = "despesa"; }
+    }
+
+    if (valor <= 0 || valor > 10_000_000) continue;
+
+    const catSkill = String(col.categoria >= 0 ? row[col.categoria] : "OUTROS").trim().toUpperCase();
+    transacoes.push({ data, descricao, valor, tipo: tipo2, categoriaSkill: catSkill });
   }
 
   const titulo = String((rows[0] as string[])?.[0] ?? "");
