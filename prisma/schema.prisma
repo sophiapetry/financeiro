@@ -19,14 +19,15 @@ model Categoria {
 }
 
 model Conta {
-  id           Int         @id @default(autoincrement())
-  nome         String      @unique
-  tipo         String      @default("corrente")
-  cor          String      @default("#3b82f6")
-  saldoInicial Float       @default(0)
-  ativo        Boolean     @default(true)
-  transacoes   Transacao[]
-  criadoEm     DateTime    @default(now())
+  id                     Int                     @id @default(autoincrement())
+  nome                   String                  @unique
+  tipo                   String                  @default("corrente")
+  cor                    String                  @default("#3b82f6")
+  saldoInicial           Float                   @default(0)
+  ativo                  Boolean                 @default(true)
+  transacoes             Transacao[]
+  transacoesInvestimento TransacaoInvestimento[]
+  criadoEm               DateTime                @default(now())
 }
 
 model Transacao {
@@ -41,6 +42,35 @@ model Transacao {
   conta       Conta?    @relation(fields: [contaId], references: [id])
   observacao  String?
   criadoEm    DateTime  @default(now())
+}
+
+model Ativo {
+  id         Int                     @id @default(autoincrement())
+  ticker     String                  @unique
+  nome       String
+  classe     String                  // "acao", "fii", "etf", "bdr", "renda_fixa", "fundo"
+  indexador  String?
+  taxa       Float?
+  vencimento DateTime?
+  corretora  String?
+  transacoes TransacaoInvestimento[]
+  criadoEm   DateTime                @default(now())
+}
+
+model TransacaoInvestimento {
+  id         Int      @id @default(autoincrement())
+  ativoId    Int
+  ativo      Ativo    @relation(fields: [ativoId], references: [id])
+  tipo       String   // "compra", "venda", "dividendo", "jscp", "rendimento", "amortizacao"
+  quantidade Float    @default(0)
+  preco      Float    @default(0)
+  valor      Float
+  taxas      Float    @default(0)
+  data       DateTime
+  contaId    Int?
+  conta      Conta?   @relation(fields: [contaId], references: [id])
+  observacao String?
+  criadoEm   DateTime @default(now())
 }
 
 model Orcamento {
