@@ -53,7 +53,7 @@ function detectarBanco(text: string): string {
   if (t.includes("nubank")) return "Nubank";
   if (t.includes("itaú") || t.includes("itau")) return "Itaú";
   if (t.includes("banco do brasil") || t.includes("bb.com")) return "Banco do Brasil";
-  if (t.includes("caixa econômica") || t.includes("caixa federal") || t.includes("cef")) return "Caixa";
+  if (t.includes("caixa econômica") || t.includes("caixa federal") || t.includes("cef") || /\bcaixa\b/.test(t)) return "Caixa";
   if (t.includes("banrisul")) return "Banrisul";
   if (t.includes("picpay")) return "PicPay";
   if (t.includes("pagseguro")) return "PagSeguro";
@@ -114,6 +114,40 @@ function parseGenerico(text: string): TransacaoRaw[] {
   }
 
   return result;
+}
+
+// ─── Parser específico Caixa ─────────────────────────────────────────────────
+// Formato: DD/MM/YYYY[ - HH:MM:SS]   NRDOC   HISTORICO   [FAVORECIDO   CPF]   VALOR D/C   SALDO D/C
+
+function parseCaixa(text: string): TransacaoRaw[] {
+  const result: TransacaoRaw[] = [];
+
+  for (const linha of text.split(/\r?\n/)) {
+    // Linha completa: data [timestamp] nrdoc descrição valor D/C saldo D/C
+    const m = linha.match(
+      /(\d{2}\/\d{2}\/\d{4})(?:\s*-\s*\d{2}:\d{2}:\d{2})?\s+\d+\s+(.+?)\s+(\d[\d.]*,\d{2})\s+([DC])\s+\d[\d.]*,\d{2}\s+[DC]/i
+    );
+    if (!m) continue;
+
+    const [, dateStr, descRaw, valorStr, dc] = m;
+    const [d, mo, y] = dateStr.split("/");
+    const data = `${y}-${mo}-${d}`;
+
+    const descricao = descRaw
+      .replace(/\*+[\w./]+\*+/g, "")   // remove CPF/CNPJ mascarados: **990.166/0***
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    if (!descricao || isLinhaDesprezivel(descricao)) continue;
+
+    const valor = parseBRMoney(valorStr);
+    if (valor <= 0) continue;
+
+    const tipo: "receita" | "despesa" = dc.toUpperCase() === "C" ? "receita" : "despesa";
+    result.push({ data, descricao, valor, tipo });
+  }
+
+  return result.length ? result : parseGenerico(text);
 }
 
 // ─── Parser específico Nubank (extrato CSV/texto) ────────────────────────────
@@ -403,6 +437,7 @@ function parseXLSX(buffer: Buffer): { transacoes: TransacaoRaw[]; banco: string 
 // ─── Handler principal ────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  try {
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ erro: "Arquivo não enviado" }, { status: 400 });
@@ -423,7 +458,9 @@ export async function POST(req: NextRequest) {
     const text = pdfData.text;
 
     banco = detectarBanco(text);
-    transacoesRaw = banco === "Nubank" ? parseNubank(text) : parseGenerico(text);
+    if (banco === "Nubank") transacoesRaw = parseNubank(text);
+    else if (banco === "Caixa") transacoesRaw = parseCaixa(text);
+    else transacoesRaw = parseGenerico(text);
 
     // Período: procura no texto padrões como "01/03/2024 a 31/03/2024"
     const periodoMatch = text.match(/(\d{2}\/\d{2}\/\d{4})\s*[aà\-–]\s*(\d{2}\/\d{2}\/\d{4})/i);
@@ -471,4 +508,9 @@ export async function POST(req: NextRequest) {
   }));
 
   return NextResponse.json({ transacoes, banco, periodo, totalLinhas: transacoes.length });
+  } catch (err) {
+    console.error("[importar] erro:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ erro: msg || "Erro interno ao processar o arquivo." }, { status: 500 });
+  }
 }
