@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const transacoes = await prisma.transacao.findMany({
     where,
     include: { categoria: true, conta: true },
-    orderBy: { data: "desc" },
+    orderBy: { data: "asc" },
   });
 
   return NextResponse.json(transacoes);

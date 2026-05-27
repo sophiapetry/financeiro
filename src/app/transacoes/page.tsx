@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import SeletorMes from "@/components/SeletorMes";
 import ModalTransacao from "@/components/ModalTransacao";
@@ -60,6 +60,14 @@ export default function TransacoesPage() {
   const totalReceitas = filtradas.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
   const totalDespesas = filtradas.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
 
+  const porDia = filtradas.reduce((acc, t) => {
+    const dia = t.data.split("T")[0];
+    if (!acc[dia]) acc[dia] = [];
+    acc[dia].push(t);
+    return acc;
+  }, {} as Record<string, Transacao[]>);
+  const dias = Object.keys(porDia).sort();
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -102,7 +110,6 @@ export default function TransacoesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b text-gray-600 text-left">
-                <th className="px-4 py-3 font-medium">Data</th>
                 <th className="px-4 py-3 font-medium">Descrição</th>
                 <th className="px-4 py-3 font-medium">Categoria</th>
                 <th className="px-4 py-3 font-medium">Conta</th>
@@ -111,42 +118,60 @@ export default function TransacoesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtradas.map((t) => (
-                <tr key={t.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(t.data)}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-800">{t.descricao}</p>
-                    {t.observacao && <p className="text-xs text-gray-400">{t.observacao}</p>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: t.categoria.cor }}>
-                      {t.categoria.nome}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {t.conta ? (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: t.conta.cor }}>
-                        {t.conta.nome}
-                      </span>
-                    ) : (
-                      <span className="text-gray-300 text-xs">—</span>
-                    )}
-                  </td>
-                  <td className={`px-4 py-3 text-right font-semibold ${t.tipo === "receita" ? "text-green-600" : "text-red-600"}`}>
-                    {t.tipo === "receita" ? "+" : "-"}{formatCurrency(t.valor)}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex justify-center gap-2">
-                      <button onClick={() => { setEditando(t); setModalAberto(true); }} className="text-gray-400 hover:text-indigo-600">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => excluir(t.id)} className="text-gray-400 hover:text-red-600">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {dias.map((dia) => {
+                const itens = porDia[dia];
+                const rec = itens.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
+                const desp = itens.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
+                const saldoDia = rec - desp;
+                return (
+                  <Fragment key={dia}>
+                    <tr className="bg-gray-50 border-b border-t">
+                      <td colSpan={3} className="px-4 py-2 font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                        {formatDate(dia)}
+                      </td>
+                      <td className={`px-4 py-2 text-right text-xs font-semibold ${saldoDia >= 0 ? "text-blue-600" : "text-red-600"}`}>
+                        {saldoDia >= 0 ? "+" : ""}{formatCurrency(saldoDia)}
+                      </td>
+                      <td />
+                    </tr>
+                    {itens.map((t) => (
+                      <tr key={t.id} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-800">{t.descricao}</p>
+                          {t.observacao && <p className="text-xs text-gray-400">{t.observacao}</p>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: t.categoria.cor }}>
+                            {t.categoria.nome}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {t.conta ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: t.conta.cor }}>
+                              {t.conta.nome}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className={`px-4 py-3 text-right font-semibold ${t.tipo === "receita" ? "text-green-600" : "text-red-600"}`}>
+                          {t.tipo === "receita" ? "+" : "-"}{formatCurrency(t.valor)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex justify-center gap-2">
+                            <button onClick={() => { setEditando(t); setModalAberto(true); }} className="text-gray-400 hover:text-indigo-600">
+                              <Pencil size={15} />
+                            </button>
+                            <button onClick={() => excluir(t.id)} className="text-gray-400 hover:text-red-600">
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
