@@ -20,7 +20,12 @@ export async function GET(req: NextRequest) {
     }),
     prisma.conta.findMany({
       where: { ativo: true },
-      include: { transacoes: { select: { valor: true, tipo: true } } },
+      include: {
+        transacoes: {
+          where: { data: { gte: inicio, lte: fim } },
+          select: { valor: true, tipo: true },
+        },
+      },
       orderBy: { nome: "asc" },
     }),
   ]);
@@ -81,7 +86,7 @@ export async function GET(req: NextRequest) {
   const saldoPorConta = contas.map((c) => {
     const rec = c.transacoes.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
     const desp = c.transacoes.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
-    return { id: c.id, nome: c.nome, cor: c.cor, saldo: c.saldoInicial + rec - desp };
+    return { id: c.id, nome: c.nome, cor: c.cor, saldo: rec - desp };
   });
 
   return NextResponse.json({
