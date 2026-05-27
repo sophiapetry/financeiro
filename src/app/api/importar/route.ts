@@ -384,7 +384,7 @@ function parseXLSX(buffer: Buffer): { transacoes: TransacaoRaw[]; banco: string 
     if (valor <= 0 || valor > 10_000_000) continue;
 
     const catSkill = String(col.categoria >= 0 ? row[col.categoria] : "OUTROS").trim().toUpperCase();
-    transacoes.push({ data, descricao, valor, tipo: tipo2, categoriaSkill: catSkill });
+    transacoes.push({ data, descricao, valor, tipo, categoriaSkill: catSkill });
   }
 
   const titulo = String((rows[0] as string[])?.[0] ?? "");
