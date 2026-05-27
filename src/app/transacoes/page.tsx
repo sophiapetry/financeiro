@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 
 interface Categoria { id: number; nome: string; cor: string; tipo: string }
 interface Conta { id: number; nome: string; cor: string }
+interface ContaResumo { id: number; nome: string; cor: string; saldo: number }
 interface Transacao {
   id: number;
   descricao: string;
@@ -25,7 +26,9 @@ export default function TransacoesPage() {
   const [mes, setMes] = useState(hoje.getMonth() + 1);
   const [ano, setAno] = useState(hoje.getFullYear());
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
+  const [contas, setContas] = useState<ContaResumo[]>([]);
   const [filtro, setFiltro] = useState("");
+  const [contaFiltro, setContaFiltro] = useState<number | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Transacao | null>(null);
 
@@ -36,6 +39,9 @@ export default function TransacoesPage() {
   }, [mes, ano]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => {
+    fetch("/api/contas").then((r) => r.json()).then(setContas);
+  }, []);
 
   async function salvar(dados: Omit<Transacao, "id" | "categoria"> & { id?: number }) {
     const url = dados.id ? `/api/transacoes/${dados.id}` : "/api/transacoes";
@@ -52,14 +58,30 @@ export default function TransacoesPage() {
     carregar();
   }
 
-  const filtradas = transacoes.filter((t) =>
-    t.descricao.toLowerCase().includes(filtro.toLowerCase()) ||
-    t.categoria.nome.toLowerCase().includes(filtro.toLowerCase())
-  );
+  // Filtra por texto e por conta
+  const filtradas = transacoes.filter((t) => {
+    const matchTexto =
+      t.descricao.toLowerCase().includes(filtro.toLowerCase()) ||
+      t.categoria.nome.toLowerCase().includes(filtro.toLowerCase());
+    const matchConta = contaFiltro === null || t.contaId === contaFiltro;
+    return matchTexto && matchConta;
+  });
 
   const totalReceitas = filtradas.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
   const totalDespesas = filtradas.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
 
+  // Saldo no início do mês = saldo atual da(s) conta(s) − movimentações do mês
+  const transacoesDaConta = contaFiltro
+    ? transacoes.filter((t) => t.contaId === contaFiltro)
+    : transacoes;
+  const recMes = transacoesDaConta.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
+  const despMes = transacoesDaConta.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
+  const saldoAtualContas = contaFiltro
+    ? (contas.find((c) => c.id === contaFiltro)?.saldo ?? 0)
+    : contas.reduce((s, c) => s + c.saldo, 0);
+  const saldoInicioMes = saldoAtualContas - recMes + despMes;
+
+  // Agrupa por dia
   const porDia = filtradas.reduce((acc, t) => {
     const dia = t.data.split("T")[0];
     if (!acc[dia]) acc[dia] = [];
@@ -67,6 +89,18 @@ export default function TransacoesPage() {
     return acc;
   }, {} as Record<string, Transacao[]>);
   const dias = Object.keys(porDia).sort();
+
+  // Calcula saldo acumulado dia a dia
+  const saldoPorDia: Record<string, { anterior: number; liquido: number; final: number }> = {};
+  let acumulado = saldoInicioMes;
+  for (const dia of dias) {
+    const itens = porDia[dia];
+    const rec = itens.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
+    const desp = itens.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
+    const liquido = rec - desp;
+    saldoPorDia[dia] = { anterior: acumulado, liquido, final: acumulado + liquido };
+    acumulado += liquido;
+  }
 
   return (
     <div className="space-y-5">
@@ -89,18 +123,30 @@ export default function TransacoesPage() {
         <span className="text-red-600 font-semibold">Despesas: {formatCurrency(totalDespesas)}</span>
         <span className="text-gray-400">|</span>
         <span className={`font-semibold ${totalReceitas - totalDespesas >= 0 ? "text-blue-600" : "text-red-600"}`}>
-          Saldo: {formatCurrency(totalReceitas - totalDespesas)}
+          Saldo do mês: {formatCurrency(totalReceitas - totalDespesas)}
         </span>
       </div>
 
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          placeholder="Buscar por descrição ou categoria..."
-          className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-        />
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            placeholder="Buscar por descrição ou categoria..."
+            className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+          />
+        </div>
+        <select
+          value={contaFiltro ?? ""}
+          onChange={(e) => setContaFiltro(e.target.value === "" ? null : Number(e.target.value))}
+          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
+        >
+          <option value="">Todas as contas</option>
+          {contas.map((c) => (
+            <option key={c.id} value={c.id}>{c.nome}</option>
+          ))}
+        </select>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -119,22 +165,27 @@ export default function TransacoesPage() {
             </thead>
             <tbody>
               {dias.map((dia) => {
-                const itens = porDia[dia];
-                const rec = itens.filter((t) => t.tipo === "receita").reduce((s, t) => s + t.valor, 0);
-                const desp = itens.filter((t) => t.tipo === "despesa").reduce((s, t) => s + t.valor, 0);
-                const saldoDia = rec - desp;
+                const { anterior, liquido, final } = saldoPorDia[dia];
                 return (
                   <Fragment key={dia}>
-                    <tr className="bg-gray-50 border-b border-t">
-                      <td colSpan={3} className="px-4 py-2 font-semibold text-gray-700 text-xs uppercase tracking-wide">
+                    <tr className="bg-indigo-50 border-b border-t border-indigo-100">
+                      <td className="px-4 py-2 font-semibold text-indigo-800 text-xs uppercase tracking-wide">
                         {formatDate(dia)}
                       </td>
-                      <td className={`px-4 py-2 text-right text-xs font-semibold ${saldoDia >= 0 ? "text-blue-600" : "text-red-600"}`}>
-                        {saldoDia >= 0 ? "+" : ""}{formatCurrency(saldoDia)}
+                      <td colSpan={2} className="px-4 py-2 text-xs text-gray-400">
+                        anterior: <span className="text-gray-600 font-medium">{formatCurrency(anterior)}</span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <div className={`text-xs font-medium ${liquido >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          {liquido >= 0 ? "+" : ""}{formatCurrency(liquido)}
+                        </div>
+                        <div className={`text-xs font-bold ${final >= 0 ? "text-indigo-700" : "text-red-700"}`}>
+                          = {formatCurrency(final)}
+                        </div>
                       </td>
                       <td />
                     </tr>
-                    {itens.map((t) => (
+                    {porDia[dia].map((t) => (
                       <tr key={t.id} className="border-b last:border-0 hover:bg-gray-50">
                         <td className="px-4 py-3">
                           <p className="font-medium text-gray-800">{t.descricao}</p>
