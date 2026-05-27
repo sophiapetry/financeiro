@@ -171,6 +171,122 @@ const MAPA_CATEGORIA: Record<string, string[]> = {
   OUTROS: ["Outros (Despesa)", "Outros (Receita)"],
 };
 
+// ─── Parser OFX ──────────────────────────────────────────────────────────────
+
+function parseOFX(buffer: Buffer): TransacaoRaw[] {
+  const text = buffer.toString("latin1");
+  const result: TransacaoRaw[] = [];
+
+  // Divide em blocos STMTTRN (suporta SGML sem tags de fechamento e XML)
+  const blocos = text.split(/<STMTTRN>/i).slice(1);
+
+  for (const bloco of blocos) {
+    const dtRaw = bloco.match(/<DTPOSTED[^>]*>(\d{8,14})/i)?.[1];
+    const amtRaw = bloco.match(/<TRNAMT[^>]*>([-+]?[\d.]+)/i)?.[1];
+    const memo = (
+      bloco.match(/<MEMO[^>]*>([^\r\n<]+)/i)?.[1] ??
+      bloco.match(/<NAME[^>]*>([^\r\n<]+)/i)?.[1] ?? ""
+    ).trim();
+    const trnType = bloco.match(/<TRNTYPE[^>]*>(\w+)/i)?.[1]?.toUpperCase();
+
+    if (!dtRaw || !amtRaw || !memo) continue;
+
+    const y = dtRaw.slice(0, 4);
+    const mo = dtRaw.slice(4, 6);
+    const d = dtRaw.slice(6, 8);
+    const data = `${y}-${mo}-${d}`;
+
+    const amt = parseFloat(amtRaw);
+    if (isNaN(amt) || amt === 0) continue;
+
+    const valor = Math.abs(amt);
+    const tipo: "receita" | "despesa" =
+      amt > 0 || trnType === "CREDIT" ? "receita" : "despesa";
+
+    result.push({ data, descricao: memo, valor, tipo });
+  }
+
+  return result;
+}
+
+// ─── Parser CSV ───────────────────────────────────────────────────────────────
+
+function parseCSV(buffer: Buffer): TransacaoRaw[] {
+  // Tenta UTF-8, senão latin-1 (comum em bancos BR)
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    text = new TextDecoder("latin1").decode(buffer);
+  }
+
+  // Remove BOM se houver
+  text = text.replace(/^﻿/, "");
+
+  const linhas = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (linhas.length < 2) return [];
+
+  // Detectar separador
+  const sep = linhas[0].includes(";") ? ";" : ",";
+
+  // Encontrar linha de cabeçalho (primeira com ≥ 3 colunas)
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(linhas.length, 10); i++) {
+    if (linhas[i].split(sep).length >= 3) { headerIdx = i; break; }
+  }
+
+  const headers = linhas[headerIdx].split(sep).map((h) =>
+    h.trim().replace(/^["']|["']$/g, "").toLowerCase()
+  );
+
+  const col = {
+    data: headers.findIndex((h) => /^data$|^date$|^dt/.test(h)),
+    desc: headers.findIndex((h) => /descri|histor|memo|lançam|lancam|estabelec/i.test(h)),
+    valor: headers.findIndex((h) => /^valor$|^value$|^amount$|^quantia$/.test(h)),
+    debito: headers.findIndex((h) => /débit|debit/i.test(h)),
+    credito: headers.findIndex((h) => /crédit|credit/i.test(h)),
+    tipo: headers.findIndex((h) => /^tipo$|^type$|natureza/i.test(h)),
+  };
+
+  const anoBase = new Date().getFullYear();
+  const result: TransacaoRaw[] = [];
+
+  for (let i = headerIdx + 1; i < linhas.length; i++) {
+    const cols = linhas[i].split(sep).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+    if (cols.length < 2) continue;
+
+    const rawDate = col.data >= 0 ? cols[col.data] : cols[0];
+    const data = parseBRDate(rawDate, anoBase);
+    if (!data) continue;
+
+    const descricao = (col.desc >= 0 ? cols[col.desc] : cols[1] ?? "").trim();
+    if (!descricao || isLinhaDesprezivel(descricao)) continue;
+
+    let valor = 0;
+    let tipo: "receita" | "despesa" = "despesa";
+
+    if (col.debito >= 0 && col.credito >= 0) {
+      const deb = parseBRMoney(cols[col.debito]);
+      const cred = parseBRMoney(cols[col.credito]);
+      if (cred > 0) { valor = cred; tipo = "receita"; }
+      else { valor = deb; tipo = "despesa"; }
+    } else if (col.valor >= 0) {
+      const raw = cols[col.valor];
+      valor = parseBRMoney(raw);
+      const rawNum = parseFloat(raw.replace(/\./g, "").replace(",", "."));
+      if (rawNum < 0) tipo = "despesa";
+      else if (col.tipo >= 0 && /créd|credit|entrada|c\b/i.test(cols[col.tipo])) tipo = "receita";
+      else if (col.tipo >= 0 && /déb|debit|saída|saida|d\b/i.test(cols[col.tipo])) tipo = "despesa";
+      else tipo = rawNum >= 0 ? "receita" : "despesa";
+    }
+
+    if (valor <= 0) continue;
+    result.push({ data, descricao: descricao.replace(/\s+/g, " "), valor, tipo });
+  }
+
+  return result;
+}
+
 // ─── XLSX (output da skill) ───────────────────────────────────────────────────
 
 function parseXLSX(buffer: Buffer): { transacoes: TransacaoRaw[]; banco: string | null; periodo: string | null } {
@@ -258,8 +374,21 @@ export async function POST(req: NextRequest) {
     transacoesRaw = parsed.transacoes;
     banco = parsed.banco;
     periodo = parsed.periodo;
+  } else if (nome.endsWith(".ofx") || nome.endsWith(".qfx")) {
+    transacoesRaw = parseOFX(buffer);
+    // Detecta banco pelo texto do OFX
+    const ofxText = buffer.toString("latin1");
+    banco = detectarBanco(ofxText);
+    const periodoMatch = ofxText.match(/DTSTART[^>]*>(\d{8})[\s\S]*?DTEND[^>]*>(\d{8})/i);
+    if (periodoMatch) {
+      const fmt = (s: string) => `${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`;
+      periodo = `${fmt(periodoMatch[1])} a ${fmt(periodoMatch[2])}`;
+    }
+  } else if (nome.endsWith(".csv") || nome.endsWith(".txt")) {
+    transacoesRaw = parseCSV(buffer);
+    banco = detectarBanco(buffer.toString("latin1"));
   } else {
-    return NextResponse.json({ erro: "Formato não suportado. Envie um .pdf ou .xlsx" }, { status: 400 });
+    return NextResponse.json({ erro: "Formato não suportado. Envie .pdf, .xlsx, .csv ou .ofx" }, { status: 400 });
   }
 
   // Resolver categorias

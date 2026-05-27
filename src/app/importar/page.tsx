@@ -39,8 +39,9 @@ export default function ImportarPage() {
 
   async function handleArquivo(file: File) {
     const ext = file.name.toLowerCase();
-    if (!ext.endsWith(".pdf") && !ext.endsWith(".xlsx") && !ext.endsWith(".xls")) {
-      setErro("Envie um arquivo .pdf (extrato do banco) ou .xlsx (da skill de digitação).");
+    const aceitos = [".pdf", ".xlsx", ".xls", ".csv", ".txt", ".ofx", ".qfx"];
+    if (!aceitos.some((e) => ext.endsWith(e))) {
+      setErro("Formato não suportado. Envie .pdf, .xlsx, .csv ou .ofx.");
       return;
     }
     setArquivo(file);
@@ -221,8 +222,8 @@ export default function ImportarPage() {
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-gray-900">Importar extrato</h1>
       <p className="text-gray-500 text-sm">
-        Envie o <strong>PDF do extrato</strong> diretamente do banco — sem precisar de nenhuma outra ferramenta.
-        Suporta Itaú, Banco do Brasil, Caixa, Banrisul, Nubank, PicPay e PagSeguro.
+        Suporta <strong>PDF, Excel, CSV e OFX</strong> — qualquer formato exportado pelo banco.
+        Itaú, Banco do Brasil, Caixa, Banrisul, Nubank, PicPay e PagSeguro.
       </p>
 
       <div
@@ -241,12 +242,12 @@ export default function ImportarPage() {
             <Upload size={40} className="text-gray-400" />
             <div className="text-center">
               <p className="text-gray-700 font-medium">Arraste o arquivo aqui ou clique para selecionar</p>
-              <p className="text-gray-400 text-sm mt-1">Formatos aceitos: .pdf ou .xlsx</p>
+              <p className="text-gray-400 text-sm mt-1">PDF · Excel · CSV · OFX</p>
             </div>
             {arquivo && <p className="text-indigo-600 text-sm font-medium">{arquivo.name}</p>}
           </>
         )}
-        <input ref={inputRef} type="file" accept=".pdf,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }} />
+        <input ref={inputRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt,.ofx,.qfx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }} />
       </div>
 
       {erro && (
@@ -258,12 +259,12 @@ export default function ImportarPage() {
       <div className="bg-gray-50 rounded-xl border p-5 space-y-3">
         <h3 className="font-semibold text-gray-700 text-sm">Como usar</h3>
         <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
-          <li>No app do banco, exporte o extrato como <strong>PDF</strong></li>
-          <li>Faça upload do PDF aqui — o sistema detecta o banco automaticamente</li>
-          <li>Revise as transações e escolha a conta</li>
+          <li>No app ou site do banco, exporte o extrato (<strong>PDF, Excel, CSV ou OFX</strong>)</li>
+          <li>Faça upload aqui — o banco é detectado automaticamente</li>
+          <li>Revise as transações e selecione a conta</li>
           <li>Confirme a importação</li>
         </ol>
-        <p className="text-xs text-gray-400 pt-1">Funciona com PDFs de texto (gerados digitalmente). PDFs escaneados não são suportados.</p>
+        <p className="text-xs text-gray-400 pt-1">OFX é o formato mais preciso quando disponível. PDFs escaneados não funcionam.</p>
       </div>
     </div>
   );
