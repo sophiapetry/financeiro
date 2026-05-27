@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus, Pencil, Trash2, X, TrendingUp, TrendingDown,
-  RefreshCw, DollarSign, BarChart2, Percent, Lock,
+  RefreshCw, DollarSign, BarChart2, Percent, Lock, Upload,
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -88,6 +88,8 @@ export default function InvestimentosPage() {
   const [carregando, setCarregando] = useState(true);
   const [atualizandoCotacoes, setAtualizandoCotacoes] = useState(false);
 
+  const [importando, setImportando] = useState(false);
+
   const [modalAtivo, setModalAtivo] = useState(false);
   const [modalTransacao, setModalTransacao] = useState(false);
   const [editandoAtivo, setEditandoAtivo] = useState<number | null>(null);
@@ -167,6 +169,27 @@ export default function InvestimentosPage() {
       return acc;
     }, {})
   ).map(([classe, valor]) => ({ name: CLASSES[classe]?.label ?? classe, value: valor, cor: CLASSES[classe]?.cor ?? "#888" }));
+
+  // ─── importar B3 ──────────────────────────────────────────────────────────
+
+  async function importarB3(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    try {
+      const form = new FormData();
+      form.append("arquivo", file);
+      const res = await fetch("/api/investimentos/importar", { method: "POST", body: form });
+      const { importados, ignorados } = await res.json();
+      alert(`Importação concluída!\n${importados} lançamentos importados\n${ignorados} linhas ignoradas`);
+      const lista = await carregarAtivos();
+      await carregarTransacoes();
+      buscarCotacoes(lista);
+    } finally {
+      setImportando(false);
+      e.target.value = "";
+    }
+  }
 
   // ─── ações sobre ativos ────────────────────────────────────────────────────
 
@@ -268,6 +291,11 @@ export default function InvestimentosPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-900">Investimentos</h1>
         <div className="flex gap-2">
+          <label className={`flex items-center gap-2 border px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 cursor-pointer ${importando ? "opacity-50 pointer-events-none" : ""}`}>
+            <Upload size={15} />
+            {importando ? "Importando..." : "Importar B3 (XLSX)"}
+            <input type="file" accept=".xlsx" className="hidden" onChange={importarB3} disabled={importando} />
+          </label>
           <button
             onClick={() => buscarCotacoes(ativos)}
             disabled={atualizandoCotacoes}
