@@ -172,7 +172,26 @@ export default function InvestimentosPage() {
 
   // ─── importar B3 ──────────────────────────────────────────────────────────
 
-  async function importarB3(e: React.ChangeEvent<HTMLInputElement>) {
+  async function importarPosicao(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    try {
+      const form = new FormData();
+      form.append("arquivo", file);
+      const res = await fetch("/api/investimentos/importar-posicao", { method: "POST", body: form });
+      const { importados } = await res.json();
+      alert(`Posição importada!\n${importados} ativos carregados`);
+      const lista = await carregarAtivos();
+      await carregarTransacoes();
+      buscarCotacoes(lista);
+    } finally {
+      setImportando(false);
+      e.target.value = "";
+    }
+  }
+
+  async function importarMovimentacao(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setImportando(true);
@@ -181,7 +200,7 @@ export default function InvestimentosPage() {
       form.append("arquivo", file);
       const res = await fetch("/api/investimentos/importar", { method: "POST", body: form });
       const { importados, ignorados } = await res.json();
-      alert(`Importação concluída!\n${importados} lançamentos importados\n${ignorados} linhas ignoradas`);
+      alert(`Movimentação importada!\n${importados} lançamentos\n${ignorados} ignorados`);
       const lista = await carregarAtivos();
       await carregarTransacoes();
       buscarCotacoes(lista);
@@ -293,8 +312,13 @@ export default function InvestimentosPage() {
         <div className="flex gap-2">
           <label className={`flex items-center gap-2 border px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 cursor-pointer ${importando ? "opacity-50 pointer-events-none" : ""}`}>
             <Upload size={15} />
-            {importando ? "Importando..." : "Importar B3 (XLSX)"}
-            <input type="file" accept=".xlsx" className="hidden" onChange={importarB3} disabled={importando} />
+            {importando ? "Importando..." : "Posição B3"}
+            <input type="file" accept=".xlsx" className="hidden" onChange={importarPosicao} disabled={importando} />
+          </label>
+          <label className={`flex items-center gap-2 border px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 cursor-pointer ${importando ? "opacity-50 pointer-events-none" : ""}`}>
+            <Upload size={15} />
+            {importando ? "Importando..." : "Movimentação B3"}
+            <input type="file" accept=".xlsx" className="hidden" onChange={importarMovimentacao} disabled={importando} />
           </label>
           <button
             onClick={() => buscarCotacoes(ativos)}
