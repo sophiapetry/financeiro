@@ -1,27 +1,115 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import { inflateSync } from "zlib";
 import { prisma } from "@/lib/prisma";
 
-// Polyfill DOMMatrix — requerido pelo pdf.js (interno do pdf-parse) em Node.js/Vercel
-if (typeof globalThis.DOMMatrix === "undefined") {
-  (globalThis as Record<string, unknown>).DOMMatrix = class {
-    a=1;b=0;c=0;d=1;e=0;f=0;is2D=true;isIdentity=true;
-    m11=1;m12=0;m13=0;m14=0;m21=0;m22=1;m23=0;m24=0;
-    m31=0;m32=0;m33=1;m34=0;m41=0;m42=0;m43=0;m44=1;
-    constructor(_init?: string | number[]) {}
-    static fromFloat64Array() { return new (globalThis as Record<string, unknown>).DOMMatrix as object; }
-    static fromFloat32Array() { return new (globalThis as Record<string, unknown>).DOMMatrix as object; }
-    static fromMatrix()       { return new (globalThis as Record<string, unknown>).DOMMatrix as object; }
-    translate() { return this; } scale()    { return this; }
-    rotate()    { return this; } multiply() { return this; }
-    inverse()   { return this; } flipX()    { return this; }
-    flipY()     { return this; } skewX()    { return this; }
-    skewY()     { return this; }
-    transformPoint(p: Record<string, number>) { return { x: p?.x??0, y: p?.y??0, z: 0, w: 1 }; }
-    toFloat32Array() { return new Float32Array(16); }
-    toFloat64Array() { return new Float64Array(16); }
-    toString() { return "matrix(1, 0, 0, 1, 0, 0)"; }
-  };
+// ─── Extrator de PDF (sem dependências externas, só zlib) ────────────────────
+
+function extractPDFText(buffer: Buffer): string {
+  const raw = buffer.toString("binary");
+  const items: { x: number; y: number; t: string }[] = [];
+
+  const streamRe = /stream\r?\n/g;
+  let sm: RegExpExecArray | null;
+  while ((sm = streamRe.exec(raw)) !== null) {
+    const dataStart = sm.index + sm[0].length;
+    const dataEnd = raw.indexOf("\nendstream", dataStart);
+    if (dataEnd < 0) continue;
+    const dictStart = raw.lastIndexOf("<<", sm.index);
+    const dict = dictStart >= 0 ? raw.slice(dictStart, sm.index) : "";
+    if (/DCTDecode|JPXDecode|JBIG2|CCITTFax/.test(dict)) continue;
+    const bytes = Buffer.from(raw.slice(dataStart, dataEnd), "binary");
+    let decoded = "";
+    if (/FlateDecode|\/Fl[\s/>]/.test(dict)) {
+      try { decoded = inflateSync(bytes).toString("latin1"); } catch { continue; }
+    } else {
+      decoded = bytes.toString("latin1");
+    }
+    parsePDFStream(decoded, items);
+  }
+
+  if (!items.length) return "";
+  items.sort((a, b) => b.y - a.y || a.x - b.x);
+
+  const lines: string[] = [];
+  let ly = items[0].y, line: string[] = [];
+  for (const it of items) {
+    if (Math.abs(it.y - ly) <= 2) { line.push(it.t); }
+    else { if (line.length) lines.push(line.join(" ")); line = [it.t]; ly = it.y; }
+  }
+  if (line.length) lines.push(line.join(" "));
+  return lines.join("\n");
+}
+
+function parsePDFStream(s: string, out: { x: number; y: number; t: string }[]) {
+  const toks = tokenizePDF(s);
+  let x = 0, y = 0;
+  const stk: string[] = [];
+  for (const tok of toks) {
+    if (tok === "Tm" && stk.length >= 6) {
+      x = parseFloat(stk[stk.length - 2]); y = parseFloat(stk[stk.length - 1]); stk.length = 0;
+    } else if ((tok === "Td" || tok === "TD") && stk.length >= 2) {
+      x += parseFloat(stk[stk.length - 2]); y += parseFloat(stk[stk.length - 1]); stk.length = 0;
+    } else if (tok === "Tj" || tok === "'" || tok === '"') {
+      const t = decodePDFStr(stk.pop() ?? ""); if (t.trim()) out.push({ x, y, t: t.trim() }); stk.length = 0;
+    } else if (tok === "TJ") {
+      const t = extractTJ(stk.pop() ?? ""); if (t.trim()) out.push({ x, y, t: t.trim() }); stk.length = 0;
+    } else {
+      stk.push(tok); if (stk.length > 14) stk.shift();
+    }
+  }
+}
+
+function tokenizePDF(s: string): string[] {
+  const toks: string[] = []; let i = 0; const n = s.length;
+  while (i < n) {
+    if (/\s/.test(s[i])) { i++; continue; }
+    if (s[i] === "(") {
+      let d = 1, j = i + 1;
+      while (j < n && d > 0) { if (s[j] === "\\") { j += 2; continue; } if (s[j] === "(") d++; else if (s[j] === ")") d--; j++; }
+      toks.push(s.slice(i, j)); i = j;
+    } else if (s[i] === "<" && s[i+1] !== "<") {
+      const e = s.indexOf(">", i + 1); if (e < 0) { i++; continue; }
+      toks.push(s.slice(i, e + 1)); i = e + 1;
+    } else if (s[i] === "[") {
+      let d = 1, j = i + 1;
+      while (j < n && d > 0) { if (s[j] === "[") d++; else if (s[j] === "]") d--; j++; }
+      toks.push(s.slice(i, j)); i = j;
+    } else {
+      let j = i; while (j < n && !/[\s\[\]()<>{}]/.test(s[j])) j++;
+      if (j > i) toks.push(s.slice(i, j)); i = Math.max(j, i + 1);
+    }
+  }
+  return toks;
+}
+
+function decodePDFStr(tok: string): string {
+  if (tok.startsWith("<") && tok.endsWith(">")) {
+    const hex = tok.slice(1, -1).replace(/\s/g, "");
+    if (/^fe?ff?/i.test(hex)) {
+      const buf = Buffer.from(hex.slice(4), "hex");
+      const out: string[] = [];
+      for (let i = 0; i < buf.length - 1; i += 2) out.push(String.fromCharCode((buf[i] << 8) | buf[i+1]));
+      return out.join("");
+    }
+    return Buffer.from(hex.padEnd(hex.length + hex.length % 2, "0"), "hex").toString("latin1");
+  }
+  let s = tok.startsWith("(") ? tok.slice(1, -1) : tok;
+  return s.replace(/\\n/g, " ").replace(/\\r/g, "").replace(/\\\\/g, "\\")
+          .replace(/\\([0-7]{1,3})/g, (_, o) => String.fromCharCode(parseInt(o, 8)))
+          .replace(/\\./g, "");
+}
+
+function extractTJ(arr: string): string {
+  if (!arr.startsWith("[")) return decodePDFStr(arr);
+  const inner = arr.slice(1, -1);
+  const parts: string[] = [];
+  const re = /\(([^)\\]*(?:\\.[^)\\]*)*)\)|<([0-9a-fA-F\s]*)>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(inner)) !== null) {
+    parts.push(m[1] !== undefined ? decodePDFStr(`(${m[1]})`) : decodePDFStr(`<${m[2]}>`));
+  }
+  return parts.join("");
 }
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -503,19 +591,7 @@ export async function POST(req: NextRequest) {
   let periodo: string | null = null;
 
   if (nome.endsWith(".pdf")) {
-    let text = "";
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mod = await import("pdf-parse") as any;
-      const pdfParse: (buf: Buffer) => Promise<{ text: string }> = mod.default ?? mod;
-      const pdfData = await pdfParse(buffer);
-      text = pdfData.text;
-    } catch (pdfErr) {
-      const msg = pdfErr instanceof Error ? pdfErr.message : String(pdfErr);
-      return NextResponse.json({
-        erro: `Não foi possível ler o PDF (${msg}). Tente exportar o extrato no formato OFX ou CSV pelo internet banking — são formatos mais precisos.`,
-      }, { status: 422 });
-    }
+    const text = extractPDFText(buffer);
 
     if (!text || text.trim().length < 20) {
       return NextResponse.json({
