@@ -38,8 +38,9 @@ export default function ImportarPage() {
   }, []);
 
   async function handleArquivo(file: File) {
-    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
-      setErro("Envie um arquivo .xlsx gerado pela skill de digitação de conta corrente.");
+    const ext = file.name.toLowerCase();
+    if (!ext.endsWith(".pdf") && !ext.endsWith(".xlsx") && !ext.endsWith(".xls")) {
+      setErro("Envie um arquivo .pdf (extrato do banco) ou .xlsx (da skill de digitação).");
       return;
     }
     setArquivo(file);
@@ -220,8 +221,8 @@ export default function ImportarPage() {
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-gray-900">Importar extrato</h1>
       <p className="text-gray-500 text-sm">
-        Envie o <strong>XLSX gerado pela skill de digitação de conta corrente</strong>.
-        Suporta extratos do Itaú, Banco do Brasil, Caixa, Banrisul, Nubank, PicPay e PagSeguro.
+        Envie o <strong>PDF do extrato</strong> diretamente do banco — sem precisar de nenhuma outra ferramenta.
+        Suporta Itaú, Banco do Brasil, Caixa, Banrisul, Nubank, PicPay e PagSeguro.
       </p>
 
       <div
@@ -240,12 +241,12 @@ export default function ImportarPage() {
             <Upload size={40} className="text-gray-400" />
             <div className="text-center">
               <p className="text-gray-700 font-medium">Arraste o arquivo aqui ou clique para selecionar</p>
-              <p className="text-gray-400 text-sm mt-1">Formato aceito: .xlsx</p>
+              <p className="text-gray-400 text-sm mt-1">Formatos aceitos: .pdf ou .xlsx</p>
             </div>
             {arquivo && <p className="text-indigo-600 text-sm font-medium">{arquivo.name}</p>}
           </>
         )}
-        <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }} />
+        <input ref={inputRef} type="file" accept=".pdf,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }} />
       </div>
 
       {erro && (
@@ -257,11 +258,12 @@ export default function ImportarPage() {
       <div className="bg-gray-50 rounded-xl border p-5 space-y-3">
         <h3 className="font-semibold text-gray-700 text-sm">Como usar</h3>
         <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
-          <li>Baixe o extrato do seu banco (PDF ou imagem)</li>
-          <li>Abra o Claude e use a skill <strong>Digitação de Conta Corrente</strong></li>
-          <li>A skill gera um <strong>.xlsx estruturado</strong></li>
-          <li>Faça upload desse xlsx aqui para importar as transações</li>
+          <li>No app do banco, exporte o extrato como <strong>PDF</strong></li>
+          <li>Faça upload do PDF aqui — o sistema detecta o banco automaticamente</li>
+          <li>Revise as transações e escolha a conta</li>
+          <li>Confirme a importação</li>
         </ol>
+        <p className="text-xs text-gray-400 pt-1">Funciona com PDFs de texto (gerados digitalmente). PDFs escaneados não são suportados.</p>
       </div>
     </div>
   );
