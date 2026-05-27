@@ -16,13 +16,18 @@ interface TransacaoRaw {
 
 function parseBRMoney(val: unknown): number {
   if (val === null || val === undefined || val === "") return 0;
-  // XLSX armazena números como float — não processar como string BR
+  // XLSX armazena números como float — usar diretamente
   if (typeof val === "number") return Math.abs(val);
-  const s = String(val).replace(/[R$\s]/g, "");
-  // Formato BR: 1.234,56
-  if (/\d\.\d{3},/.test(s)) return Math.abs(parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0);
-  // Formato padrão: 1234.56 ou 1,234.56
-  return Math.abs(parseFloat(s.replace(/,/g, "")) || 0);
+  const s = String(val).replace(/[R$\s]/g, "").trim();
+  if (!s || s === "-") return 0;
+  // BR com milhares: 1.234,56
+  if (/\d\.\d{3},\d/.test(s)) return Math.abs(parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0);
+  // US com milhares: 1,234.56
+  if (/\d,\d{3}\./.test(s)) return Math.abs(parseFloat(s.replace(/,/g, "")) || 0);
+  // BR simples sem milhares: 614,96 — vírgula é decimal
+  if (/^-?\d+,\d{1,2}$/.test(s)) return Math.abs(parseFloat(s.replace(",", ".")) || 0);
+  // Padrão: 614.96
+  return Math.abs(parseFloat(s) || 0);
 }
 
 function parseBRDate(s: string, anoBase: number): string | null {
